@@ -4,7 +4,7 @@ from PIL import Image
 import re
 import urllib.parse
 
-# מאגר אינטליגנציה רפואי מורחב - גזעים קטנים וגדולים
+# --- מאגר ידע גנטי מדעי מורחב ---
 breed_intelligence = {
     "שיצו": {"genetics": "נטייה לבעיות כבד (Shunt), אלרגיות עור ובעיות בדרכי הנשימה.", "risk_markers": ["ALT", "EOS"], "rec": "מזון קל לעיכול ותומך כבד."},
     "מלטז": {"genetics": "סיכון לאבנים בדרכי השתן (Struvite) ומחלות מסתמי לב.", "risk_markers": ["CREA", "BUN"], "rec": "מזון דל מינרלים (Urinary)."},
@@ -12,11 +12,10 @@ breed_intelligence = {
     "מלטיפו": {"genetics": "נטייה לבעיות ברכיים, אלרגיות מזון ובעיות עיכול.", "risk_markers": ["EOS", "AMYL"], "rec": "מזון היפו-אלרגני וסיוע למפרקים."},
     "בולדוג צרפתי": {"genetics": "בעיות נשימה חסימתיות (BOAS), אלרגיות עור ועיוותי חוליות.", "risk_markers": ["WBC", "EOS"], "rec": "חלבון איכותי מפורק ומשקל מבוקר."},
     "פומרניאן": {"genetics": "בעיות בלוטת התריס, נשירת שיער (Alopecia X) וקריסת קנה.", "risk_markers": ["CHOL", "WBC"], "rec": "מזון לטיפוח הפרווה ותמיכה חיסונית."},
-    "פאג": {"genetics": "סיכון לעודף משקל קיצוני, בעיות נשימה ודלקות בעור הקפלים.", "risk_markers": ["CHOL", "GLU"], "rec": "מזון מופחת קלוריות (Weight Management)."},
-    "דקל (תחש)": {"genetics": "סיכון גבוה מאוד לפריצות דיסק (IVDD) ובעיות שיניים.", "risk_markers": ["CREA", "ALKP"], "rec": "שמירה על משקל נמוך ותוספי סידן מבוקרים."},
+    "צ'יוואווה": {"genetics": "מחלות לב (Mitral Valve), היפוגליקמיה ובעיות שיניים.", "risk_markers": ["GLU", "ALT"], "rec": "ארוחות תכופות ותמיכה דנטלית."},
+    "פאג": {"genetics": "סיכון לעודף משקל, בעיות נשימה ודלקות בעור הקפלים.", "risk_markers": ["CHOL", "GLU"], "rec": "מזון מופחת קלוריות (Weight Management)."},
+    "דקל (תחש)": {"genetics": "סיכון גבוה לפריצות דיסק (IVDD) ובעיות שיניים.", "risk_markers": ["CREA", "ALKP"], "rec": "שמירה על משקל נמוך ותמיכה במפרקים."},
     "ביגל": {"genetics": "נטייה להשמנה, אפילפסיה ובעיות בלוטת התריס.", "risk_markers": ["CHOL", "ALKP"], "rec": "מזון לניהול משקל ופעילות גופנית."},
-    "קוקר ספנייל": {"genetics": "נטייה לדלקות אוזניים כרוניות ומחלות כבד.", "risk_markers": ["ALT", "EOS"], "rec": "מזון עשיר באומגה 3 ותמיכה בכבד."},
-    "האסקי סיבירי": {"genetics": "רגישות לספיגת אבץ ובעיות עיניים.", "risk_markers": ["ALKP", "WBC"], "rec": "מזון עשיר במינרלים ונוגדי חמצון."},
     "לברדור/גולדן": {"genetics": "סיכון למפרקי ירך, השמנה וגידולים.", "risk_markers": ["CHOL", "GLU"], "rec": "מזון Mobility ותפריט דל קלוריות."}
 }
 
@@ -37,7 +36,7 @@ def get_adjusted_ranges(age):
     for m, info in blood_db_base.items():
         new_info = info.copy()
         if age < 1.0:
-            if m == "ALKP": new_info["max"] = 450
+            if m == "ALKP": new_info["max"] = 500
             if m == "GLU": new_info["min"] = 85
         elif age > 7.0:
             if m == "CREA": new_info["max"] = 1.6
@@ -56,26 +55,26 @@ def extract_data(image):
     return results
 
 # --- UI Layout ---
-st.set_page_config(page_title="Foodels AI V8 - Elite Edition", layout="wide")
+st.set_page_config(page_title="Foodels AI V9 - The Machine", layout="wide")
 
-st.sidebar.title("🐾 Foodels AI Pro")
+st.sidebar.title("🐾 פרופיל רפואי")
 dog_name = st.sidebar.text_input("שם הכלב:", "באדי")
-dog_breed = st.sidebar.selectbox("בחר גזע:", list(breed_intelligence.keys()) + ["מעורב/אחר"])
+dog_breed = st.sidebar.selectbox("גזע הכלב:", list(breed_intelligence.keys()) + ["מעורב/אחר"])
 dog_age = st.sidebar.number_input("גיל (שנים):", 0.1, 25.0, 5.0)
-dog_weight = st.sidebar.number_input("משקל (ק\"ג):", 0.1, 100.0, 10.0)
+dog_weight = st.sidebar.number_input("משקל (ק\"ג):", 0.1, 100.0, 8.0)
 
 age_cat = "גור" if dog_age < 1 else ("סניור" if dog_age > 7 else "בוגר")
 adjusted_db = get_adjusted_ranges(dog_age)
 
-st.title(f"🐾 דוח פיענוח וניתוח סיכונים: {dog_name}")
-st.markdown(f"**פודלס באר שבע** | {age_cat} | {dog_breed} | {dog_weight} ק\"ג")
+st.title(f"🐾 Foodels Lab - פיענוח מדעי: {dog_name}")
+st.markdown(f"**נחום שריג 33, באר שבע** | סטטוס: {age_cat} | גזע: {dog_breed}")
 
 if dog_breed in breed_intelligence:
-    with st.expander(f"🔬 דגשים מדעיים לגזע {dog_breed}", expanded=True):
-        st.write(f"**פרופיל גנטי:** {breed_intelligence[dog_breed]['genetics']}")
-        st.info(f"🌿 **המלצת מניעה של פודלס:** {breed_intelligence[dog_breed]['rec']}")
+    with st.expander(f"🔬 נקודות תורפה ל{dog_breed}", expanded=True):
+        st.write(f"**מידע מדעי:** {breed_intelligence[dog_breed]['genetics']}")
+        st.info(f"💡 **המלצת פודלס:** {breed_intelligence[dog_breed]['rec']}")
 
-uploaded_file = st.file_uploader("סרוק טופס בדיקה", type=["jpg", "png", "jpeg"])
+uploaded_file = st.file_uploader("העלה צילום בדיקה", type=["jpg", "png", "jpeg"])
 
 if uploaded_file:
     img = Image.open(uploaded_file)
@@ -83,41 +82,36 @@ if uploaded_file:
     
     if data:
         issues_count = 0
-        whatsapp_msg = f"סיכום בריאות ל*{dog_name}* מפודלס:\n\n"
+        whatsapp_msg = f"סיכום בריאות ל*{dog_name}* מפודלס באר שבע:\n\n"
         
         col1, col2 = st.columns([2, 1])
-        
         with col1:
-            st.subheader("תוצאות וניתוח:")
+            st.subheader("ניתוח מדדים:")
             for m, val in data.items():
                 info = adjusted_db[m]
-                is_low = val < info["min"]
-                is_high = val > info["max"]
-                is_issue = is_low or is_high
+                is_issue = val > info["max"] or val < info["min"]
                 is_genetic = dog_breed in breed_intelligence and m in breed_intelligence[dog_breed]["risk_markers"]
                 
                 if is_issue: issues_count += 1
                 color = "red" if is_issue else "green"
+                icon = "🚨" if is_issue else "✅"
                 
-                with st.expander(f"{info['name']}: {val} ({'🚨' if is_issue else '✅'})", expanded=is_issue):
-                    if is_genetic: st.warning(f"⚠️ מדד זה מהווה נקודת תורפה ידועה ב{dog_breed}!")
+                with st.expander(f"{info['name']}: {val} {icon}", expanded=is_issue):
+                    if is_genetic: st.warning("⚠️ מדד זה קריטי במיוחד לגזע זה!")
                     st.markdown(f"**תוצאה:** :{color}[{val} {info['unit']}] (טווח: {info['min']}-{info['max']})")
                     if is_issue: 
                         st.error(f"סיבה אפשרית: {info['cause']}")
                         whatsapp_msg += f"📍 {info['name']}: {val} (חריגה)\n"
                     else:
-                        whatsapp_summary_val = f"✅ {info['name']}: {val}\n"
+                        whatsapp_msg += f"✅ {info['name']}: {val}\n"
 
         with col2:
-            st.subheader("מדד בריאות כללי")
+            st.subheader("מדד בריאות")
             health_score = max(0, 100 - (issues_count * 15))
-            st.metric("Health Score", f"{health_score}%", f"-{issues_count} חריגות")
-            if health_score < 80:
-                st.warning("מומלץ להתחיל בשינוי תזונתי בהקדם.")
-            else:
-                st.success("הכלב במצב מצוין!")
+            st.metric("Health Score", f"{health_score}%")
+            st.progress(health_score / 100)
+            if health_score < 80: st.warning("נדרשת התאמת מזון רפואי.")
+            else: st.success("מצב תקין!")
 
-        encoded_msg = urllib.parse.quote(whatsapp_msg + "\nמוזמנים אלינו לפודלס להתאמת המזון המדויק!")
-        st.markdown(f'<a href="https://wa.me/?text={encoded_msg}" target="_blank"><button style="background-color: #25D366; color: white; border: none; padding: 20px; border-radius: 12px; width: 100%; font-size: 20px; cursor: pointer;">📲 שלח דוח Elite ללקוח</button></a>', unsafe_allow_html=True)
-    else:
-        st.error("לא זוהו מדדים. נסה לצלם שוב מקרוב.")
+        encoded_msg = urllib.parse.quote(whatsapp_msg + "\nנשמח להתאים לכם מזון רפואי בחנות!")
+        st.markdown(f'<a href="https://wa.me/?text={encoded_msg}" target="_blank"><button style="background-color: #25D366; color: white; border: none; padding: 15px; border-radius: 8px; width: 100%; font-weight: bold; cursor: pointer;">📲 שלח סיכום מכונה ללקוח</button></a>', unsafe_allow_html=True)

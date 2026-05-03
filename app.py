@@ -3,94 +3,57 @@ import pytesseract
 from PIL import Image
 import re
 
-# הגדרת בסיס הנתונים עם כל הפיצ'רים (אלרגיה, דלקת, כליות, כבד)
+# הגדרת המדדים - הוספתי עוד וריאציות לשמות כדי להקל על הזיהוי
 blood_db = {
-    "CREA": {"name": "קריאטינין (כליות)", "min": 0.5, "max": 1.8, "unit": "mg/dL", "cat": "Kidney", 
-             "rec": "חשד לעומס כלייתי. מומלץ מזון רפואי Renal ותוספי תמיכה בכליות."},
-    "EOS": {"name": "אאוזינופילים (אלרגיה)", "min": 0.1, "max": 1.2, "unit": "x10³/µL", "cat": "Allergy", 
-            "rec": "מדד אלרגיה גבוה. מומלץ לעבור למזון היפו-אלרגני (חלבון מפורק או דג) למשך 8 שבועות."},
-    "WBC": {"name": "כדוריות דם לבנות (דלקת)", "min": 5.0, "max": 16.7, "unit": "x10³/µL", "cat": "Inflammation", 
-            "rec": "סימני דלקת או זיהום. מומלץ להוסיף אומגה 3 ונוגדי חמצון לחיזוק מערכת החיסון."},
-    "ALT": {"name": "אנזימי כבד (ALT)", "min": 10, "max": 125, "unit": "U/L", "cat": "Liver", 
-            "rec": "עומס על הכבד. מומלץ תזונה קלה לעיכול ותוספי ניקוי רעלים (סילמרין)."}
+    "CREA": {"name": "קריאטינין (כליות)", "min": 0.5, "max": 1.8, "unit": "mg/dL", "rec": "חשד לעומס כלייתי. מומלץ מזון רפואי Renal."},
+    "EOS": {"name": "אאוזינופילים (אלרגיה)", "min": 0.1, "max": 1.2, "unit": "x10³/µL", "rec": "מדד אלרגיה גבוה. מומלץ מזון היפו-אלרגני."},
+    "ALT": {"name": "אנזימי כבד (ALT)", "min": 10, "max": 125, "unit": "U/L", "rec": "עומס על הכבד. מומלץ תזונה קלה לעיכול."},
+    "WBC": {"name": "כדוריות דם לבנות", "min": 5.0, "max": 16.7, "unit": "x10³/µL", "rec": "סימני דלקת. מומלץ חיזוק חיסוני."}
 }
 
 def extract_from_image(image):
-    # המרת תמונה לטקסט
-    text = pytesseract.image_to_string(image)
+    # שיפור: הוספת הגדרות למנוע ה-OCR לשיפור דיוק במספרים
+    custom_config = r'--oem 3 --psm 6'
+    text = pytesseract.image_to_string(image, config=custom_config)
+    
     results = {}
+    # ניקוי טקסט בסיסי כדי להקל על החיפוש
+    clean_text = text.replace('(', ' ').replace(')', ' ').replace('|', ' ')
+    
     for marker in blood_db.keys():
-        # מחפש את המדד ואת המספר שאחריו
-        pattern = rf"{marker}\s*[:\-]?\s*(\d+\.?\d*)"
-        match = re.search(pattern, text, re.IGNORECASE)
+        # ביטוי רגולרי גמיש יותר: מחפש את שם המדד, ואז כל תו שאינו מספר, ואז את המספר
+        pattern = rf"{marker}.*?(\d+\.?\d*)"
+        match = re.search(pattern, clean_text, re.IGNORECASE)
         if match:
             results[marker] = float(match.group(1))
-    return results
+    
+    return results, text # מחזירים גם את הטקסט הגולמי לצורך בדיקה
 
-def get_analysis(current_data, past_data, breed):
-    # פיצ'ר התאמת גזע
-    if breed == "Greyhound":
-        blood_db["CREA"]["max"] = 2.1
-        
-    report = []
-    for marker, val in current_data.items():
-        db = blood_db[marker]
-        past_val = past_data.get(marker)
-        status = "תקין ✅"
-        advice = ""
-        
-        # זיהוי חריגה
-        if val > db["max"]:
-            status = "גבוה 🚨"
-            advice = f"**המלצה:** {db['rec']}"
-        
-        # פיצ'ר ניתוח מגמות
-        if past_val:
-            change = ((val - past_val) / past_val) * 100
-            if change > 15:
-                advice += f" | 📈 **התרעת מגמה:** עלייה של {change:.1f}% מהבדיקה הקודמת."
+# ממשק המשתמש
+st.set_page_config(page_title="Vet-Scan Foodels V2", page_icon="🐾")
+st.title("🐾 Vet-Scan V2: מפענח הבריאות")
 
-        report.append({"name": db["name"], "val": val, "unit": db["unit"], "status": status, "advice": advice})
-    return report
-
-# ממשק המשתמש (UI)
-st.set_page_config(page_title="Vet-Scan Foodels", page_icon="🐾")
-st.title("🐾 Vet-Scan: מפענח הבריאות של פודלס")
-st.write("סרוק את בדיקות הדם של הכלב וקבל פיענוח והמלצות תזונה מיידיות.")
-
-# בחירת גזע (פיצ'ר קריטי)
-breed = st.selectbox("בחר גזע הכלב:", ["מעורב/אחר", "Greyhound", "Poodle", "Labrador"])
-
-# העלאת צילום
-uploaded_file = st.file_uploader("צלם או העלה את טופס הבדיקה", type=["jpg", "png", "jpeg"])
+breed = st.selectbox("גזע הכלב:", ["מעורב", "Greyhound", "Poodle"])
+uploaded_file = st.file_uploader("העלה את טופס הבדיקה", type=["jpg", "png", "jpeg"])
 
 if uploaded_file:
     img = Image.open(uploaded_file)
-    st.image(img, caption="הטופס שנסרק", use_container_width=True)
+    st.image(img, caption="התמונה שהועלתה", use_container_width=True)
     
-    with st.spinner("מנתח נתונים רפואיים..."):
-        scanned_results = extract_from_image(img)
+    with st.spinner("מנתח..."):
+        scanned_results, raw_text = extract_from_image(img)
+    
+    # כפתור סודי לראות מה המערכת קראה (לצורך תיקון תקלות)
+    with st.expander("ראה טקסט שנסרק (לביקורת טכנית)"):
+        st.code(raw_text)
         
     if scanned_results:
         st.success(f"זיהיתי {len(scanned_results)} מדדים!")
-        
-        # הזנת נתוני עבר לניתוח מגמות
-        st.write("---")
-        st.write("### ניתוח מגמות (אופציונלי)")
-        p_crea = st.number_input("ערך קריאטינין בבדיקה קודמת (אם יש):", value=0.0)
-        
-        if st.button("הפק דווח סופי"):
-            past_dict = {"CREA": p_crea} if p_crea > 0 else {}
-            final_report = get_analysis(scanned_results, past_dict, breed)
-            
-            for r in final_report:
-                st.markdown(f"#### {r['name']}: {r['val']} {r['unit']} ({r['status']})")
-                if r['advice']:
-                    st.info(r['advice'])
-                st.divider()
+        for marker, val in scanned_results.items():
+            db = blood_db[marker]
+            status = "תקין ✅" if val <= db["max"] else "גבוה 🚨"
+            st.write(f"**{db['name']}**: {val} {db['unit']} ({status})")
+            if val > db["max"]:
+                st.warning(db["rec"])
     else:
-        st.error("לא הצלחתי לזהות מדדים. וודא שהצילום ברור וכולל את קיצורי המדדים (CREA, EOS וכד').")
-
-st.sidebar.write("---")
-st.sidebar.write("**פודלס באר שבע**")
-st.sidebar.write("נחום שריג 33, רמות")
+        st.error("לא הצלחתי לזהות מדדים. נסה לוודא שהטקסט בתמונה ברור מאוד.")

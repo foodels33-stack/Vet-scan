@@ -13,7 +13,7 @@ hebrew_mapping = {
     "אלבומין": "ALB", "חלבון": "TP"
 }
 
-# --- 2. מאגר גנטי וגזעים מורחב ---
+# --- 2. מאגר גזעים וסיכונים גנטיים מורחב ---
 breed_intelligence = {
     "שיצו": {"genetics": "נטייה לבעיות כבד (Shunt) ואלרגיות עור.", "risk_markers": ["ALT", "EOS"], "rec": "מזון קל לעיכול ותומך כבד."},
     "מלטז": {"genetics": "סיכון לאבנים בדרכי השתן ומחלות מסתמי לב.", "risk_markers": ["CREA", "BUN"], "rec": "מזון דל מינרלים (Urinary)."},
@@ -22,45 +22,49 @@ breed_intelligence = {
     "פיטבול": {"genetics": "אלרגיות עור ובעיות בבלוטת התריס.", "risk_markers": ["EOS", "CHOL"], "rec": "מזון היפו-אלרגני."},
     "לברדור/גולדן": {"genetics": "מפרקי ירך, השמנה ונטייה לגידולים.", "risk_markers": ["CHOL", "GLU"], "rec": "מזון דל קלוריות וסיוע למפרקים."},
     "בולדוג צרפתי": {"genetics": "בעיות נשימה (BOAS) ואלרגיות עור.", "risk_markers": ["WBC", "EOS"], "rec": "חלבון מפורק ומשקל מבוקר."},
-    "צ'יוואווה": {"genetics": "מחלות לב והיפוגליקמיה.", "risk_markers": ["GLU", "ALT"], "rec": "ארוחות קטנות ותכופות."}
+    "רועה אוסטרלי": {"genetics": "רגישות MDR1 ובעיות עיניים.", "risk_markers": ["ALT", "ALKP"], "rec": "נוגדי חמצון ותמיכה בכבד."}
 }
 
-# --- 3. בסיס נתונים רפואי עם סיבות לחריגה ---
 blood_db_base = {
     "CREA": {"name": "קריאטינין (כליות)", "min": 0.5, "max": 1.5, "unit": "mg/dL", "cause": "עומס כלייתי, התייבשות או פגיעה בתפקוד הכליות."},
-    "ALT": {"name": "אנזימי כבד (ALT)", "min": 10, "max": 100, "unit": "U/L", "cause": "פגיעה בתאי כבד או דלקת כבד."},
-    "GLU": {"name": "גלוקוז (סוכר)", "min": 70, "max": 110, "unit": "mg/dL", "cause": "סוכרת או סטרס חריף."},
-    "BUN": {"name": "אוריאה", "min": 7, "max": 27, "unit": "mg/dL", "cause": "בעיה בתפקוד הכליות או תזונה עתירת חלבון."},
-    "HGB": {"name": "המוגלובין", "min": 12.0, "max": 18.0, "unit": "g/dL", "cause": "אנמיה או התייבשות."},
+    "ALT": {"name": "אנזימי כבד (ALT)", "min": 10, "max": 100, "unit": "U/L", "cause": "פגיעה בתאי כבד, דלקת כבד או חשיפה לרעלים."},
+    "GLU": {"name": "גלוקוז (סוכר)", "min": 70, "max": 110, "unit": "mg/dL", "cause": "סוכרת, סטרס חריף או צריכת פחמימות גבוהה."},
+    "BUN": {"name": "אוריאה", "min": 7, "max": 27, "unit": "mg/dL", "cause": "תפקוד כליות ירוד או תזונה עתירת חלבון."},
+    "HGB": {"name": "המוגלובין", "min": 12.0, "max": 18.0, "unit": "g/dL", "cause": "אנמיה (אם נמוך) או התייבשות (אם גבוה)."},
     "WBC": {"name": "כדוריות לבנות", "min": 6.0, "max": 17.0, "unit": "K/µL", "cause": "זיהום חיידקי או דלקת פעילה."},
-    "ALKP": {"name": "פוספטאזה בסיסית", "min": 20, "max": 150, "unit": "U/L", "cause": "בעיות כבד/מרה או צמיחת עצם בגורים."},
+    "ALKP": {"name": "פוספטאזה בסיסית", "min": 20, "max": 150, "unit": "U/L", "cause": "בעיות כבד/מרה או צמיחת עצם."},
     "PLT": {"name": "טסיות (PLT)", "min": 200, "max": 500, "unit": "K/µL", "cause": "בעיות קרישה או דלקת."}
 }
 
-def extract_data_v17(image):
-    # סריקה מרחבית (Spatial Mapping)
+# --- 3. מנוע סריקה מרחבי חכם (Anchor-Value Logic) ---
+def extract_data_v18(image):
     d = pytesseract.image_to_data(image, config=r'--oem 3 --psm 6 -l heb+eng', output_type=pytesseract.Output.DICT)
     results = {}
+    
+    # מיפוי כל המילים והמספרים לפי קואורדינטות
     for i in range(len(d['text'])):
         word = d['text'][i].strip()
         for heb_word, eng_key in hebrew_mapping.items():
-            if heb_word in word or eng_key in word.upper():
+            if heb_word in word or (len(word) > 2 and word.upper() in eng_key):
                 curr_y = d['top'][i]
-                # חיפוש "ירי" לרוחב השורה למציאת המספר
+                line_nums = []
+                # מחפש את כל המספרים באותה שורה
                 for j in range(len(d['text'])):
-                    if abs(d['top'][j] - curr_y) < 25: 
+                    if abs(d['top'][j] - curr_y) < 25:
                         num_match = re.search(r"(\d+\.?\d*)", d['text'][j])
                         if num_match:
-                            val = float(num_match.group(1))
-                            # נוודא שזה לא טווח הנורמה שתפסנו בטעות
-                            if eng_key not in results or (val != 12.0 and val != 1.5):
-                                results[eng_key] = val
+                            line_nums.append(float(num_match.group(1)))
+                
+                # לוגיקה לבחירת המספר הנכון (התוצאה בדרך כלל בין שם המדד לטווח הנורמה)
+                if line_nums:
+                    if len(line_nums) >= 1:
+                        results[eng_key] = line_nums[0] # לוקח את המספר הראשון אחרי השם
     return results
 
-# --- UI המערכת ---
-st.set_page_config(page_title="Foodels AI V17 - The Machine", layout="wide")
+# --- 4. ממשק המערכת (UI) ---
+st.set_page_config(page_title="Foodels AI V18 - The Beast", layout="wide")
 st.sidebar.title("🐾 Foodels Lab Pro")
-st.sidebar.write("**חנות חיות פודלס - באר שבע**")
+st.sidebar.write("**פודלס באר שבע | נחום שריג 33**")
 
 dog_name = st.sidebar.text_input("שם הכלב:", "טוסי")
 dog_breed = st.sidebar.selectbox("גזע הכלב:", list(breed_intelligence.keys()) + ["מעורב/אחר"])
@@ -79,7 +83,7 @@ uploaded_file = st.file_uploader("העלה את טופס הבדיקה", type=["j
 
 if uploaded_file:
     img = Image.open(uploaded_file)
-    data = extract_data_v17(img)
+    data = extract_data_v18(img)
     
     if data:
         issues = 0
@@ -109,5 +113,5 @@ if uploaded_file:
             st.progress(score / 100)
             if score < 85: st.warning("מומלץ ייעוץ תזונתי להתאמת מזון תומך.")
 
-        msg = urllib.parse.quote(wa_summary + "\nנחכה לכם בפודלס, נחום שריג 33!")
+        msg = urllib.parse.quote(wa_summary + "\nנחכה לכם בפודלס!")
         st.markdown(f'<a href="https://wa.me/?text={msg}" target="_blank"><button style="background-color: #25D366; color: white; border: none; padding: 15px; border-radius: 8px; width: 100%; cursor: pointer; font-weight: bold;">📲 שלח דו"ח מלא ללקוח</button></a>', unsafe_allow_html=True)

@@ -4,7 +4,7 @@ from PIL import Image
 import re
 import urllib.parse
 
-# --- 1. ליבת הנתונים: פודלס באר שבע ---
+# --- 1. הגדרות ליבה: פודלס באר שבע ---
 SHOP_INFO = "פודלס - נחום שריג 33, שכונת רמות, באר שבע | 08-6655443"
 
 hebrew_mapping = {
@@ -38,25 +38,26 @@ blood_db_base = {
     "AMYL": {"name": "עמילאז", "min": 500, "max": 1500, "unit": "U/L", "cause": "בעיות לבלב."}
 }
 
-# --- 2. מנוע המומחה: הצלבות נתונים ודיאגנוזה ---
-def generate_expert_diagnosis(data, breed):
-    diagnosis = []
-    # הצלבת כליות
-    if data.get("CREA", 0) > 1.5 and data.get("BUN", 0) > 27:
-        diagnosis.append("🚨 **עומס כלייתי משולב:** חריגה בשני מדדי הכליות מעידה על פגיעה בתפקוד הניקוז. יש לשקול מזון Renal.")
-    # הצלבת כבד
+# --- 2. המוח הווטרינרי: מנוע הצלבות ודיאגנוזה ---
+def run_expert_diagnosis(data, breed, weight, age):
+    diag = []
+    # הצלבת כליות ומשקל
+    if data.get("CREA", 0) > 1.5 or data.get("BUN", 0) > 27:
+        status = "חריפה" if data.get("CREA", 0) > 2.0 else "ראשונית"
+        diag.append(f"🚨 **אבחנה כלייתית {status}:** ישנו עומס על הכליות. במשקל של {weight} ק\"ג, חשוב להקפיד על צריכת נוזלים ומזון Renal.")
+    # הצלבת כבד וגנטיקה
     if data.get("ALT", 0) > 100 or data.get("ALKP", 0) > 150:
-        diagnosis.append("🚨 **ממצא כבדי:** חריגה באנזימי כבד. בשילוב עם גנטיקה של " + breed + ", מומלץ מזון תומך כבד.")
-    # הצלבת דלקת
-    if data.get("WBC", 0) > 17 and data.get("TP", 0) > 8.2:
-        diagnosis.append("🚨 **דלקת כרונית:** שילוב של לבנות וחלבון גבוה מעיד על תהליך דלקתי מתמשך.")
+        diag.append(f"🚨 **ממצא כבדי:** חריגה באנזימי כבד. בגזע {breed}, ישנה רגישות מוגברת לממצאים אלו.")
+    # הצלבת סוכר וגיל
+    if data.get("GLU", 0) > 110 and age > 8:
+        diag.append("🚨 **חשד מטבולי:** רמת סוכר גבוהה בגיל מבוגר מחייבת מעקב סוכרת.")
     
-    if not diagnosis:
-        diagnosis.append("✅ **סיכום כללי:** המדדים העיקריים מאוזנים. מומלץ להמשיך בתזונה הנוכחית.")
-    return diagnosis
+    if not diag:
+        diag.append("✅ **סיכום מומחה:** לא נמצאו הצלבות מדאיגות. המצב יציב.")
+    return diag
 
-# --- 3. מנוע סריקה הוליסטי ---
-def extract_data_v31(image):
+# --- 3. מנוע סריקה V32 ---
+def extract_v32(image):
     d = pytesseract.image_to_data(image, config=r'--oem 3 --psm 6 -l heb+eng', output_type=pytesseract.Output.DICT)
     results = {}
     for i in range(len(d['text'])):
@@ -67,52 +68,60 @@ def extract_data_v31(image):
                 line_nums = []
                 for j in range(len(d['text'])):
                     if abs(d['top'][j] - curr_y) < 35:
-                        num_match = re.search(r"(\d+\.?\d*)", d['text'][j])
-                        if num_match:
-                            val = float(num_match.group(1))
+                        num = re.search(r"(\d+\.?\d*)", d['text'][j])
+                        if num:
+                            val = float(num.group(1))
                             if 0.1 <= val <= 2000 and val != 6789123:
                                 line_nums.append(val)
                 if line_nums:
-                    results[eng_key] = line_nums[-1] # התוצאה הסופית
+                    results[eng_key] = line_nums[-1]
     return results
 
-# --- 4. ממשק המערכת ---
-st.set_page_config(page_title="Foodels Omega Brain V31", layout="wide")
+# --- 4. ממשק המשתמש המלא ---
+st.set_page_config(page_title="Foodels Master Brain V32", layout="wide")
 st.sidebar.title("🐾 Foodels Lab Pro")
 st.sidebar.info(SHOP_INFO)
 
 dog_name = st.sidebar.text_input("שם הכלב:", "בונו")
-dog_breed = st.sidebar.selectbox("גזע:", list(breed_intelligence.keys()) + ["מעורב"])
-dog_age = st.sidebar.number_input("גיל:", 0.1, 25.0, 5.0)
+dog_breed = st.sidebar.selectbox("גזע הכלב:", list(breed_intelligence.keys()) + ["מעורב"])
+dog_age = st.sidebar.number_input("גיל הכלב:", 0.1, 25.0, 5.0)
+dog_weight = st.sidebar.number_input("משקל (ק\"ג):", 0.1, 100.0, 15.0)
 
 st.title(f"🩺 מומחה הפיענוח של פודלס: {dog_name}")
 
-uploaded_file = st.file_uploader("העלה טופס לבדיקה וניתוח מומחה", type=["jpg", "png", "jpeg"])
+if dog_breed in breed_intelligence:
+    with st.expander(f"🧬 רקע גנטי: {dog_breed}", expanded=False):
+        st.write(breed_intelligence[dog_breed]['genetics'])
+        st.info(f"המלצה: {breed_intelligence[dog_breed]['rec']}")
+
+uploaded_file = st.file_uploader("העלה טופס לסריקה וניתוח מומחה", type=["jpg", "png", "jpeg"])
 
 if uploaded_file:
     img = Image.open(uploaded_file)
-    data = extract_data_v31(img)
+    data = extract_v32(img)
     if data:
         col1, col2 = st.columns([2, 1])
         with col1:
             st.subheader("📊 מדדי מעבדה")
+            issues_count = 0
             for m, val in data.items():
                 if m in blood_db_base:
                     info = blood_db_base[m]
                     is_bad = val > info["max"] or val < info["min"]
+                    if is_bad: issues_count += 1
                     with st.expander(f"{info['name']}: {val} {'🚨' if is_bad else '✅'}", expanded=is_bad):
                         st.write(f"תוצאה: {val} (טווח: {info['min']}-{info['max']})")
-                        if is_bad: st.error(f"סיבה: {info['cause']}")
-
+        
         with col2:
-            st.subheader("🧠 דיאגנוזה והצלבות")
-            expert_notes = generate_expert_diagnosis(data, dog_breed)
-            for note in expert_notes:
-                st.write(note)
+            st.subheader("🧠 אבחנת מומחה (הצלבות)")
+            expert_summary = run_expert_diagnosis(data, dog_breed, dog_weight, dog_age)
+            for line in expert_summary:
+                st.write(line)
             
-            score = max(0, 100 - (len([v for k,v in data.items() if v > blood_db_base.get(k,{}).get('max',999)]) * 12))
-            st.metric("Health Score", f"{score}%")
+            score = max(0, 100 - (issues_count * 12))
+            st.metric("ציון בריאות כללי", f"{score}%")
+            st.progress(score / 100)
 
-        wa_summary = f"סיכום מומחה ל*{dog_name}* מפודלס:\n" + "\n".join(expert_notes)
-        msg = urllib.parse.quote(wa_summary + f"\nבואו אלינו להתאמת תזונה: {SHOP_INFO}")
-        st.markdown(f'<a href="https://wa.me/?text={msg}" target="_blank"><button style="background-color: #25D366; color: white; border: none; padding: 15px; border-radius: 8px; width: 100%; cursor: pointer; font-weight: bold;">📲 שלח חוות דעת מומחה ללקוח</button></a>', unsafe_allow_html=True)
+        wa_text = f"חוות דעת מומחה ל*{dog_name}* מפודלס:\n" + "\n".join(expert_summary)
+        msg = urllib.parse.quote(wa_text + f"\nכתובתנו: {SHOP_INFO}")
+        st.markdown(f'<a href="https://wa.me/?text={msg}" target="_blank"><button style="background-color: #25D366; color: white; border: none; padding: 15px; border-radius: 8px; width: 100%; cursor: pointer; font-weight: bold;">📲 שלח אבחנה מלאה לווטסאפ</button></a>', unsafe_allow_html=True)

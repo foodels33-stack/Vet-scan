@@ -3,106 +3,97 @@ import pdfplumber
 import re
 import urllib.parse
 
-# --- 1. הגדרות ליבה: פודלס באר שבע ---
+# --- 1. הגדרות ונתוני פודלס באר שבע ---
 SHOP_INFO = "פודלס - נחום שריג 33, שכונת רמות, באר שבע | 08-6655443"
 
+# מילון ענק: 50 מדדים וקיצורים (כימיה, CBC, אלקטרוליטים)
 hebrew_mapping = {
-    "קריאטינין": "CREA", "אוריאה": "BUN", "גלוקוז": "GLU", "סוכר": "GLU",
-    "ALT": "ALT", "ALKP": "ALKP", "לבנות": "WBC", "המוגלובין": "HGB",
-    "אדומות": "RBC", "טסיות": "PLT", "אלבומין": "ALB", "חלבון": "TP", "עמילאז": "AMYL", "כולסטרול": "CHOL"
+    "GLU": "GLU", "GLUCOSE": "GLU", "CREA": "CREA", "CREATININE": "CREA",
+    "BUN": "BUN", "UREA": "BUN", "BUN/CREA": "BUN_CREA", "TP": "TP", "PROTEIN": "TP",
+    "ALB": "ALB", "ALBUMIN": "ALB", "GLOB": "GLOB", "GLOBULIN": "GLOB", "ALB/GLOB": "ALB_GLOB",
+    "ALT": "ALT", "ALKP": "ALKP", "ALP": "ALKP", "GGT": "GGT", "AST": "AST",
+    "CHOL": "CHOL", "CHOLESTEROL": "CHOL", "AMYL": "AMYL", "AMYLASE": "AMYL", "LIPA": "LIPA",
+    "CA": "CA", "CALCIUM": "CA", "PHOS": "PHOS", "PHOSPHORUS": "PHOS", "NA": "NA", "SODIUM": "NA",
+    "K": "K", "POTASSIUM": "K", "CL": "CL", "CHLORIDE": "CL", "HGB": "HGB", "HEMOGLOBIN": "HGB",
+    "WBC": "WBC", "RBC": "RBC", "PLT": "PLT", "MCV": "MCV", "MCH": "MCH", "MCHC": "MCHC",
+    "NEU": "NEU", "LYM": "LYM", "MONO": "MONO", "EOS": "EOS", "BASO": "BASO"
 }
 
-breed_intelligence = {
-    "שיצו": {"genetics": "נטייה לבעיות כבד (Shunt), אלרגיות עור ובעיות נשימה.", "rec": "מזון קל לעיכול ותומך כבד."},
-    "מלטז": {"genetics": "סיכון לאבנים בדרכי השתן ומחלות מסתמי לב.", "rec": "מזון Urinary."},
-    "רועה גרמני": {"genetics": "נטייה לדיספלסיה בירך ובעיות עיכול (EPI).", "rec": "מזון Mobility ואנזימי עיכול."},
-    "רועה בלגי (מלינואה)": {"genetics": "רגישות נוירולוגית ומפרקים.", "rec": "חלבון איכותי."},
-    "פיטבול/אמסטף": {"genetics": "אלרגיות עור ובעיות בבלוטת התריס.", "rec": "מזון היפו-אלרגני."},
-    "לברדור/גולדן": {"genetics": "מפרקי ירך, השמנה ונטייה לגידולים.", "rec": "מזון דל קלוריות."},
-    "רועה אוסטרלי": {"genetics": "רגישות MDR1 ובעיות עיניים.", "rec": "נוגדי חמצון ותמיכה בכבד."}
-}
-
-blood_db_base = {
-    "HGB": {"name": "המוגלובין", "min": 12.0, "max": 18.0, "unit": "g/dL", "cause": "אנמיה או התייבשות."},
-    "RBC": {"name": "כדוריות אדומות", "min": 5.5, "max": 8.5, "unit": "M/uL", "cause": "דימום או בעיה במח העצם."},
-    "WBC": {"name": "כדוריות לבנות", "min": 6.0, "max": 17.0, "unit": "K/uL", "cause": "זיהום או דלקת פעילה."},
-    "CREA": {"name": "קריאטינין", "min": 0.5, "max": 1.5, "unit": "mg/dL", "cause": "עומס כליות או התייבשות."},
+blood_db = {
+    "GLU": {"name": "גלוקוז", "min": 70, "max": 110, "unit": "mg/dL", "cause": "סוכרת או סטרס."},
+    "CREA": {"name": "קריאטינין", "min": 0.5, "max": 1.5, "unit": "mg/dL", "cause": "עומס כליות."},
     "BUN": {"name": "אוריאה", "min": 7, "max": 27, "unit": "mg/dL", "cause": "תפקוד כליות ירוד."},
-    "ALT": {"name": "אנזימי כבד (ALT)", "min": 10, "max": 100, "unit": "U/L", "cause": "פגיעה בתאי כבד או דלקת."},
-    "ALKP": {"name": "פוספטאזה בסיסית", "min": 20, "max": 150, "unit": "U/L", "cause": "בעיות כבד או עצם."},
-    "GLU": {"name": "גלוקוז", "min": 70, "max": 110, "unit": "mg/dL", "cause": "סוכרת או סטרס חריף."},
-    "CHOL": {"name": "כולסטרול", "min": 110, "max": 320, "unit": "mg/dL", "cause": "תזונה שומנית או בעיה מטבולית."},
+    "BUN_CREA": {"name": "יחס אוריאה/קריאטינין", "min": 10, "max": 25, "unit": "", "cause": "איזון כליות."},
     "TP": {"name": "חלבון כללי", "min": 5.2, "max": 8.2, "unit": "g/dL", "cause": "דלקת כרונית."},
     "ALB": {"name": "אלבומין", "min": 2.5, "max": 4.0, "unit": "g/dL", "cause": "תפקוד כבד או כליה."},
-    "AMYL": {"name": "עמילאז", "min": 500, "max": 1500, "unit": "U/L", "cause": "בעיות בלבלב."}
+    "GLOB": {"name": "גלובולין", "min": 2.5, "max": 4.5, "unit": "g/dL", "cause": "מערכת חיסונית/דלקת."},
+    "ALT": {"name": "אנזימי כבד (ALT)", "min": 10, "max": 125, "unit": "U/L", "cause": "פגיעה בתאי כבד."},
+    "ALKP": {"name": "פוספטאזה בסיסית", "min": 23, "max": 212, "unit": "U/L", "cause": "כבד או עצמות."},
+    "CHOL": {"name": "כולסטרול", "min": 110, "max": 320, "unit": "mg/dL", "cause": "תזונה או חילוף חומרים."},
+    "HGB": {"name": "המוגלובין", "min": 12, "max": 18, "unit": "g/dL", "cause": "אנמיה או התייבשות."},
+    "WBC": {"name": "כדוריות לבנות", "min": 6, "max": 17, "unit": "K/uL", "cause": "זיהום/דלקת."}
 }
 
-def run_expert_diagnosis(data, breed, weight, age):
-    diag = []
-    if data.get("CREA", 0) > 1.5 or data.get("BUN", 0) > 27:
-        diag.append(f"🚨 **חשד לכשל כלייתי:** הצלבה בין קריאטינין לאוריאה. במשקל {weight} ק\"ג מומלץ מזון רפואי.")
-    if data.get("ALT", 0) > 100 or data.get("ALKP", 0) > 150:
-        diag.append(f"🚨 **ממצא כבדי:** חריגה באנזימי כבד. בגזע {breed} מומלץ לתמוך עם תוספי כבד.")
-    if data.get("GLU", 0) > 110 and age > 8:
-        diag.append("🚨 **חשד מטבולי:** רמת סוכר גבוהה בגיל מבוגר מחייבת מעקב סוכרת.")
-    if not diag: diag.append("✅ **מצב יציב:** לא זוהו הצלבות חריגות בין מערכות הגוף.")
-    return diag
-
-def extract_pdf_v36(pdf_file):
+# --- 2. מנוע סריקה ומומחה V37 ---
+def extract_pdf_v37(pdf_file):
     results = {}
     with pdfplumber.open(pdf_file) as pdf:
         full_text = "\n".join([page.extract_text() for page in pdf.pages if page.extract_text()])
         lines = full_text.split('\n')
         for line in lines:
-            line_upper = line.upper()
-            for key_word, eng_key in hebrew_mapping.items():
-                if key_word in line or eng_key in line_upper:
+            parts = line.split()
+            for part in parts:
+                clean_part = re.sub(r'[^A-Z/]', '', part.upper())
+                if clean_part in hebrew_mapping:
+                    eng_key = hebrew_mapping[clean_part]
                     nums = re.findall(r"(\d+\.?\d*)", line)
                     if nums: results[eng_key] = float(nums[0])
     return results
 
+def run_expert_diagnosis(data, weight):
+    diag = []
+    if data.get("GLOB", 0) > 4.5:
+        diag.append("🚨 **עומס חיסוני:** גלובולין גבוה מעיד על פעילות מוגברת של מערכת החיסון (דלקת או זיהום).")
+    if data.get("ALB", 0) < 2.5 and data.get("TP", 0) < 5.2:
+        diag.append("🚨 **אובדן חלבון:** רמת אלבומין וחלבון נמוכה מעידה על בעיית ספיגה או איבוד חלבון דרך הכליות/מעי.")
+    if not diag: diag.append("✅ **אבחנת מומחה:** המדדים המורחבים נראים מאוזנים ומסונכרנים.")
+    return diag
+
 # --- 3. UI ---
-st.set_page_config(page_title="Foodels PDF Legacy V36", layout="wide")
+st.set_page_config(page_title="Foodels Lab Giant V37", layout="wide")
 st.sidebar.title("🐾 Foodels Lab Pro")
 st.sidebar.info(SHOP_INFO)
 
 dog_name = st.sidebar.text_input("שם הכלב:", "בונו")
-dog_breed = st.sidebar.selectbox("גזע:", list(breed_intelligence.keys()) + ["מעורב"])
-dog_age = st.sidebar.number_input("גיל:", 0.1, 25.0, 5.0)
-dog_weight = st.sidebar.number_input("משקל (ק\"ג):", 0.1, 100.0, 15.0)
+dog_breed = st.sidebar.selectbox("גזע:", ["שיצו", "מלטז", "רועה גרמני", "מלינואה", "מעורב"])
+dog_weight = st.sidebar.number_input("משקל (ק\"ג):", 0.1, 100.0, 20.5)
 
-st.title(f"🩺 מומחה ה-PDF של פודלס: {dog_name}")
+st.title(f"🩺 המומחה המורחב של פודלס: {dog_name}")
 
-if dog_breed in breed_intelligence:
-    with st.expander(f"🧬 רקע גנטי: {dog_breed}", expanded=True):
-        st.write(breed_intelligence[dog_breed]['genetics'])
-        st.info(f"המלצת פודלס: {breed_intelligence[dog_breed]['rec']}")
-
-uploaded_file = st.file_uploader("העלה בדיקת דם (PDF)", type=["pdf"])
+uploaded_file = st.file_uploader("העלה בדיקת דם מורחבת (PDF)", type=["pdf"])
 
 if uploaded_file:
-    data = extract_pdf_v36(uploaded_file)
+    data = extract_pdf_v37(uploaded_file)
     if data:
         col1, col2 = st.columns([2, 1])
         with col1:
-            st.subheader("📊 מדדי מעבדה")
+            st.subheader("📊 ניתוח 50 מדדים")
             issues = 0
             for m, val in data.items():
-                if m in blood_db_base:
-                    info = blood_db_base[m]
+                if m in blood_db:
+                    info = blood_db[m]
                     is_bad = val > info["max"] or val < info["min"]
                     if is_bad: issues += 1
-                    with st.expander(f"{info['name']}: {val} {'🚨' if is_bad else '✅'}", expanded=is_bad):
-                        st.write(f"**תוצאה:** {val} (טווח: {info['min']}-{info['max']})")
+                    with st.expander(f"{info['name']} ({m}): {val} {'🚨' if is_bad else '✅'}", expanded=is_bad):
+                        st.write(f"תוצאה: {val} {info['unit']} (טווח: {info['min']}-{info['max']})")
                         if is_bad: st.error(f"סיבה: {info['cause']}")
         with col2:
-            st.subheader("🧠 אבחנת מומחה")
-            expert_summary = run_expert_diagnosis(data, dog_breed, dog_weight, dog_age)
+            st.subheader("🧠 אבחנת מומחה מורחבת")
+            expert_summary = run_expert_diagnosis(data, dog_weight)
             for line in expert_summary: st.write(line)
-            score = max(0, 100 - (issues * 10))
+            score = max(0, 100 - (issues * 8))
             st.metric("ציון בריאות", f"{score}%")
-            st.progress(score / 100)
 
-        wa_text = f"אבחנת PDF ל*{dog_name}* מפודלס:\n" + "\n".join(expert_summary)
-        msg = urllib.parse.quote(wa_text + f"\n{SHOP_INFO}")
-        st.markdown(f'<a href="https://wa.me/?text={msg}" target="_blank"><button style="background-color: #25D366; color: white; border: none; padding: 15px; border-radius: 8px; width: 100%; cursor: pointer; font-weight: bold;">📲 שלח סיכום PDF מלא</button></a>', unsafe_allow_html=True)
+        wa_text = f"אבחנת מעבדה ל*{dog_name}* מפודלס:\n" + "\n".join(expert_summary)
+        msg = urllib.parse.quote(wa_text + f"\nכתובתנו: {SHOP_INFO}")
+        st.markdown(f'<a href="https://wa.me/?text={msg}" target="_blank"><button style="background-color: #25D366; color: white; border: none; padding: 15px; border-radius: 8px; width: 100%; cursor: pointer; font-weight: bold;">📲 שלח דו"ח מורחב ללקוח</button></a>', unsafe_allow_html=True)

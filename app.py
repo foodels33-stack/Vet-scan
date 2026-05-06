@@ -14,9 +14,10 @@ st.markdown("""
         direction: rtl;
         text-align: right;
     }
+    h1 { text-align: center; color: #1E1E1E; }
     .stAlert { direction: rtl; text-align: right; }
     div[data-testid="stSidebar"] { text-align: right; }
-    div.stButton > button { width: 100%; background-color: #25D366; color: white; font-weight: bold; height: 50px; border-radius: 12px; }
+    div.stButton > button { width: 100%; background-color: #25D366; color: white; font-weight: bold; height: 50px; border-radius: 12px; border: none; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -36,7 +37,12 @@ blood_db = {
     "ALKP": {"name": "פוספטאזה בסיסית", "min": 23, "max": 212, "unit": "U/L", "desc": "קשור לכבד, דרכי מרה ועצמות.", "cause": "בעיות בדרכי מרה או כבד."}
 }
 
-breed_intel = {"שיצו": {"risk": "בעיות כבד (Shunt) ואלרגיות עור.", "rec": "מזון קל לעיכול ותומך כבד."}}
+breed_intel = {
+    "שיצו": {"risk": "בעיות כבד (Shunt) ואלרגיות עור.", "rec": "מזון קל לעיכול ותומך כבד."},
+    "בוקסר": {"risk": "נטייה לבעיות לב (AS) וגידולי עור.", "rec": "מזון עשיר באומגה 3 ותמיכה קרדיאלית."},
+    "מלינואה": {"risk": "בעיות מפרקים ורגישות עיכול.", "rec": "חלבון איכותי ותמיכה במפרקים."},
+    "רועה גרמני": {"risk": "דיספלסיה בירך ובעיות לבלב.", "rec": "מזון Mobility ואנזימי עיכול."}
+}
 
 # --- 3. מנוע סריקה V50 (אוטומציה ודיוק עשרוני) ---
 def extract_v50(pdf_file):
@@ -46,7 +52,6 @@ def extract_v50(pdf_file):
         lines = text.split('\n')
         for line in lines:
             line_u = line.upper()
-            # אוטומציית פרטים
             if "PATIENT NAME:" in line_u: 
                 n = line.split("Name:")[1].split()[0]
                 res["meta"]["name"] = n[::-1] if any("\u0590" <= c <= "\u05FF" for c in n) else n
@@ -57,20 +62,20 @@ def extract_v50(pdf_file):
                 a = re.search(r"Age:\s*(\d+)", line, re.I)
                 if a: res["meta"]["age"] = a.group(1)
 
-            # סריקת מדדים מדויקת
             for key in blood_db.keys():
                 if key in line_u:
                     match = re.search(rf"{re.escape(key)}\s+(\d+\.\d+|\d+)", line_u)
                     if match:
                         val = float(match.group(1))
-                        if key == "CREA" and val > 5.0: continue # התעלמות מיחס Ratio
+                        if key == "CREA" and val > 5.0: continue 
                         res["data"][key] = val
     return res
 
-# --- 4. ממשק המשתמש של פודלס ---
+# --- 4. ממשק המשתמש ---
 st.sidebar.title("🐾 Foodels Lab Pro")
 st.sidebar.info(SHOP_INFO)
 
+st.markdown("<h1>🩺 מערכת פיענוח בדיקות דם - פודלס באר שבע</h1>", unsafe_allow_html=True)
 uploaded_file = st.file_uploader("העלה בדיקת דם (PDF) לסריקה אוטומטית מושלמת", type=["pdf"])
 
 if uploaded_file:
